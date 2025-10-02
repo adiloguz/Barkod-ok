@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Market SKT Takip</title>
+    
+    <!-- PWA için Gerekli Meta Etiketleri -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4A90E2">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SKT Takip">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #f1c40f;
+            --danger-color: #e74c3c;
+            --success-color: #2ecc71;
+            --light-gray: #f2f3f5;
+            --dark-gray: #34495e;
+            --text-color: #ffffff;
+            --card-bg: #ffffff;
+            --shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--light-gray);
+            color: var(--dark-gray);
+        }
+
+        .page {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out;
+            background-color: var(--light-gray);
+        }
+
+        .page.active {
+            transform: translateX(0);
+            z-index: 1;
+        }
+        
+        #page-main { z-index: 2; }
+
+        header {
+            background-color: var(--primary-color);
+            color: var(--text-color);
+            padding: 1rem;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        main {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        /* Ana Sayfa */
+        .header-actions {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        #settings-btn {
+            background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;
+        }
+
+        .search-container { margin-bottom: 1rem; }
+        #searchInput {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        #searchInput:focus { outline: none; border-color: var(--primary-color); }
+        
+        #product-list.empty {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 60vh;
+            text-align: center;
+            color: #95a5a6;
+        }
+
+        .product-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            border-left: 8px solid var(--success-color);
+            opacity: 0;
+            animation: fadeIn 0.5s forwards;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .product-card.nearing-expiry { border-left-color: var(--secondary-color); }
+        .product-card.expired { border-left-color: var(--danger-color); }
+
+        .product-info { flex-grow: 1; }
+        .product-info h3 { margin-bottom: 0.25rem; }
+        .product-info p { color: #7f8c8d; font-size: 0.9rem; }
+        .product-expiry-info .days-left { font-weight: bold; font-size: 1.1rem; }
+        .nearing-expiry .days-left { color: var(--secondary-color); }
+        .expired .days-left { color: var(--danger-color); }
+
+        .product-actions button {
+            background: none; border: none; cursor: pointer; font-size: 1.3rem; margin-left: 0.75rem; color: #bdc3c7;
+        }
+        
+        .fab {
+            position: fixed; z-index: 100; bottom: 1.5rem; right: 1.5rem; width: 60px; height: 60px; border-radius: 50%;
+            background-color: var(--primary-color); color: var(--text-color); border: none; font-size: 2.2rem;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3); cursor: pointer; display: flex; justify-content: center; align-items: center;
+            transition: transform 0.2s;
+        }
+        .fab:active { transform: scale(0.95); }
+
+        /* Form Sayfası */
+        .back-btn {
+            position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); background: none; border: none;
+            color: var(--text-color); font-size: 1.8rem; cursor: pointer;
+        }
+
+        #product-form { display: flex; flex-direction: column; gap: 1.5rem; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { margin-bottom: 0.5rem; color: #555; font-weight: 500; }
+        .form-group input { padding: 0.9rem; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; }
+        .barcode-group { position: relative; }
+        #scan-barcode-btn {
+            position: absolute; right: 1px; top: 35px; height: calc(100% - 36px); width: 50px; border: none; background-color: #eee;
+            cursor: pointer; font-size: 1.5rem; border-top-right-radius: 8px; border-bottom-right-radius: 8px; color: #555;
+        }
+        .form-actions { display: flex; gap: 1rem; margin-top: 1rem; }
+        .btn { padding: 1rem; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer; font-weight: bold; flex-grow: 1; }
+        .btn-primary { background-color: var(--primary-color); color: var(--text-color); }
+        .btn-danger { background-color: var(--danger-color); color: var(--text-color); display: none; }
+
+        /* Tarayıcı Sayfası */
+        #page-scanner { background-color: #000; }
+        .scanner-main { padding: 0; position: relative; }
+        #video-container { width: 100%; height: 100%; overflow: hidden; }
+        #video { width: 100%; height: 100%; object-fit: cover; }
+        .scanner-info {
+            position: absolute; bottom: 2rem; left: 50%; transform: translateX(-50%); color: white;
+            background-color: rgba(0,0,0,0.6); padding: 0.5rem 1rem; border-radius: 8px;
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content { background-color: white; padding: 2rem; border-radius: 12px; width: 90%; max-width: 400px; }
+        .modal-content h2 { margin-bottom: 1.5rem; }
+        .modal-actions { display: flex; flex-direction: column; gap: 1rem; }
+        .modal-actions button, .modal-actions label { width: 100%; }
+        #import-file-input { display: none; }
+
+        /* Toast Bildirimleri */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; }
+        .toast {
+            padding: 1rem 1.5rem; border-radius: 8px; color: white; margin-bottom: 0.5rem;
+            box-shadow: var(--shadow); opacity: 0; transform: translateY(-20px);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.success { background-color: var(--success-color); }
+        .toast.error { background-color: var(--danger-color); }
+    </style>
+</head>
+<body>
+
+    <!-- ANA SAYFA - ÜRÜN LİSTESİ -->
+    <div id="page-main" class="page active">
+        <header>
+            <h1>Ürünler</h1>
+            <div class="header-actions">
+                <button id="settings-btn">⚙️</button>
+            </div>
+        </header>
+        <main>
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Ürün ara...">
+            </div>
+            <div id="product-list"></div>
+        </main>
+        <footer>
+            <button id="add-product-btn" class="fab">+</button>
+        </footer>
+    </div>
+
+    <!-- ÜRÜN EKLE/DÜZENLE SAYFASI -->
+    <div id="page-form" class="page">
+        <header>
+            <button class="back-btn">←</button>
+            <h1 id="form-title">Yeni Ürün Ekle</h1>
+        </header>
+        <main>
+            <form id="product-form">
+                <input type="hidden" id="product-id">
+                <div class="form-group">
+                    <label for="product-name">Ürün Adı</label>
+                    <input type="text" id="product-name" required>
+                </div>
+                <div class="form-group barcode-group">
+                    <label for="product-barcode">Barkod</label>
+                    <input type="text" id="product-barcode" required>
+                    <button type="button" id="scan-barcode-btn">📷</button>
+                </div>
+                <div class="form-group">
+                    <label for="product-expiry">Son Kullanma Tarihi</label>
+                    <input type="date" id="product-expiry" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Kaydet</button>
+                    <button type="button" id="delete-btn" class="btn btn-danger">Sil</button>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <!-- BARKOD OKUYUCU SAYFASI -->
+    <div id="page-scanner" class="page">
+        <header>
+            <button class="back-btn">←</button>
+            <h1>Barkodu Okutun</h1>
+        </header>
+        <main class="scanner-main">
+            <div id="video-container"><video id="video"></video></div>
+            <p class="scanner-info">Kamerayı barkoda odaklayın.</p>
+        </main>
+    </div>
+
+    <!-- AYARLAR MODALI -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h2>Ayarlar</h2>
+            <div class="modal-actions">
+                <button id="export-btn" class="btn btn-primary">Verileri Dışa Aktar</button>
+                <label for="import-file-input" class="btn btn-primary">Verileri İçe Aktar</label>
+                <input type="file" id="import-file-input" accept=".json">
+                <button id="close-modal-btn" class="btn">Kapat</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- TOAST BİLDİRİM KONTEYNERİ -->
+    <div id="toast-container"></div>
+    
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const App = {
+                // DOM Elementleri
+                elements: {
+                    pages: document.querySelectorAll('.page'),
+                    mainPage: document.getElementById('page-main'),
+                    formPage: document.getElementById('page-form'),
+                    scannerPage: document.getElementById('page-scanner'),
+                    productList: document.getElementById('product-list'),
+                    productForm: document.getElementById('product-form'),
+                    formTitle: document.getElementById('form-title'),
+                    productId: document.getElementById('product-id'),
+                    productName: document.getElementById('product-name'),
+                    productBarcode: document.getElementById('product-barcode'),
+                    productExpiry: document.getElementById('product-expiry'),
+                    deleteBtn: document.getElementById('delete-btn'),
+                    searchInput: document.getElementById('searchInput'),
+                    video: document.getElementById('video'),
+                    toastContainer: document.getElementById('toast-container'),
+                    settingsModal: document.getElementById('settings-modal'),
+                    importFileInput: document.getElementById('import-file-input'),
+                },
+
+                // Uygulama Verileri
+                state: {
+                    products: [],
+                    currentPage: 'page-main',
+                },
+
+                // Barkod Okuyucu
+                codeReader: new ZXing.BrowserMultiFormatReader(),
+
+                // Uygulamayı Başlat
+                init() {
+                    this.loadProducts();
+                    this.renderProducts();
+                    this.bindEvents();
+                    this.registerServiceWorker();
+                },
+                
+                // Olay Dinleyicileri
+                bindEvents() {
+                    document.getElementById('add-product-btn').addEventListener('click', () => this.showAddForm());
+                    document.querySelectorAll('.back-btn').forEach(btn => {
+                        btn.addEventListener('click', () => this.showPage(btn.closest('.page').id === 'page-scanner' ? 'page-form' : 'page-main'));
+                    });
+                    document.getElementById('scan-barcode-btn').addEventListener('click', () => this.startScanner());
+                    this.elements.productForm.addEventListener('submit', (e) => this.handleFormSubmit(e));
+                    this.elements.deleteBtn.addEventListener('click', () => this.deleteProduct());
+                    this.elements.searchInput.addEventListener('input', () => this.renderProducts());
+                    
+                    // Ayarlar
+                    document.getElementById('settings-btn').addEventListener('click', () => this.elements.settingsModal.classList.add('active'));
+                    document.getElementById('close-modal-btn').addEventListener('click', () => this.elements.settingsModal.classList.remove('active'));
+                    document.getElementById('export-btn').addEventListener('click', () => this.exportData());
+                    this.elements.importFileInput.addEventListener('change', (e) => this.importData(e));
+                },
+
+                // Sayfa Yönetimi
+                showPage(pageId) {
+                    this.state.currentPage = pageId;
+                    this.elements.pages.forEach(page => page.classList.remove('active'));
+                    document.getElementById(pageId).classList.add('active');
+                    if (pageId !== 'page-scanner') this.codeReader.reset();
+                },
+
+                // Veri Yönetimi
+                loadProducts() {
+                    this.state.products = JSON.parse(localStorage.getItem('products')) || [];
+                },
+
+                saveProducts() {
+                    localStorage.setItem('products', JSON.stringify(this.state.products));
+                },
+
+                // Ürün Listeleme
+                renderProducts() {
+                    const list = this.elements.productList;
+                    list.innerHTML = '';
+                    const filter = this.elements.searchInput.value.toLowerCase();
+                    
+                    const sortedProducts = [...this.state.products].sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+                    const filteredProducts = sortedProducts.filter(p => p.name.toLowerCase().includes(filter));
+
+                    if (filteredProducts.length === 0) {
+                        list.classList.add('empty');
+                        list.innerHTML = '<div><p style="font-size: 1.2rem;">Henüz ürün yok.</p><p>İlk ürününüzü eklemek için + düğmesine dokunun.</p></div>';
+                        return;
+                    }
+                    list.classList.remove('empty');
+                    
+                    filteredProducts.forEach(product => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const expiryDate = new Date(product.expiry);
+                        const timeDiff = expiryDate.getTime() - today.getTime();
+                        const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+                        let statusClass = '', statusText = `${dayDiff} gün kaldı`;
+                        if (dayDiff < 0) {
+                            statusClass = 'expired';
+                            statusText = `Süresi ${Math.abs(dayDiff)} gün geçti`;
+                        } else if (dayDiff <= 7) {
+                            statusClass = 'nearing-expiry';
+                        }
+
+                        const card = document.createElement('div');
+                        card.className = `product-card ${statusClass}`;
+                        card.innerHTML = `
+                            <div class="product-info">
+                                <h3>${product.name}</h3>
+                                <p>SKT: ${new Date(product.expiry).toLocaleDateString('tr-TR')}</p>
+                            </div>
+                            <div class="product-expiry-info"><span class="days-left">${statusText}</span></div>
+                            <div class="product-actions"><button class="edit-btn">✏️</button></div>
+                        `;
+                        
+                        card.querySelector('.edit-btn').addEventListener('click', () => this.showEditForm(product.id));
+                        list.appendChild(card);
+                    });
+                },
+
+                // Form İşlemleri
+                showAddForm() {
+                    this.elements.formTitle.textContent = 'Yeni Ürün Ekle';
+                    this.elements.productForm.reset();
+                    this.elements.productId.value = '';
+                    this.elements.deleteBtn.style.display = 'none';
+                    this.showPage('page-form');
+                },
+
+                showEditForm(id) {
+                    const product = this.state.products.find(p => p.id == id);
+                    if (!product) return;
+
+                    this.elements.formTitle.textContent = 'Ürünü Düzenle';
+                    this.elements.productId.value = product.id;
+                    this.elements.productName.value = product.name;
+                    this.elements.productBarcode.value = product.barcode;
+                    this.elements.productExpiry.value = product.expiry;
+                    this.elements.deleteBtn.style.display = 'block';
+                    this.showPage('page-form');
+                },
+
+                handleFormSubmit(e) {
+                    e.preventDefault();
+                    const id = this.elements.productId.value;
+                    const productData = {
+                        name: this.elements.productName.value,
+                        barcode: this.elements.productBarcode.value,
+                        expiry: this.elements.productExpiry.value,
+                    };
+
+                    if (id) { // Düzenleme
+                        const index = this.state.products.findIndex(p => p.id == id);
+                        this.state.products[index] = { ...this.state.products[index], ...productData };
+                        this.showToast('Ürün güncellendi.', 'success');
+                    } else { // Ekleme
+                        productData.id = Date.now();
+                        this.state.products.push(productData);
+                        this.showToast('Ürün eklendi.', 'success');
+                    }
+                    
+                    this.saveProducts();
+                    this.renderProducts();
+                    this.showPage('page-main');
+                },
+                
+                deleteProduct() {
+                    const id = this.elements.productId.value;
+                    if (confirm('Bu ürünü silmek istediğinize emin misiniz?')) {
+                        this.state.products = this.state.products.filter(p => p.id != id);
+                        this.saveProducts();
+                        this.renderProducts();
+                        this.showPage('page-main');
+                        this.showToast('Ürün silindi.', 'success');
+                    }
+                },
+
+                // Barkod Okuyucu
+                startScanner() {
+                    this.showPage('page-scanner');
+                    this.codeReader.getVideoInputDevices().then(devices => {
+                        if (devices.length > 0) {
+                            this.codeReader.decodeFromVideoDevice(devices[0].deviceId, 'video', (result, err) => {
+                                if (result) {
+                                    this.elements.productBarcode.value = result.getText();
+                                    this.showPage('page-form');
+                                }
+                            });
+                        }
+                    }).catch(err => console.error(err));
+                },
+                
+                // Yardımcı Fonksiyonlar
+                showToast(message, type = 'success') {
+                    const toast = document.createElement('div');
+                    toast.className = `toast ${type}`;
+                    toast.textContent = message;
+                    this.elements.toastContainer.appendChild(toast);
+                    
+                    setTimeout(() => toast.classList.add('show'), 10);
+                    setTimeout(() => {
+                        toast.classList.remove('show');
+                        toast.addEventListener('transitionend', () => toast.remove());
+                    }, 3000);
+                },
+
+                // Veri Yedekleme & Geri Yükleme
+                exportData() {
+                    if (this.state.products.length === 0) {
+                        this.showToast("Dışa aktarılacak ürün yok.", "error");
+                        return;
+                    }
+                    const dataStr = JSON.stringify(this.state.products, null, 2);
+                    const blob = new Blob([dataStr], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `skt-yedek-${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    this.showToast("Veriler dışa aktarıldı.", "success");
+                },
+
+                importData(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const importedProducts = JSON.parse(e.target.result);
+                            if (Array.isArray(importedProducts)) {
+                                this.state.products = importedProducts;
+                                this.saveProducts();
+                                this.renderProducts();
+                                this.showToast("Veriler başarıyla içe aktarıldı.", "success");
+                                this.elements.settingsModal.classList.remove('active');
+                            } else {
+                                throw new Error("Geçersiz dosya formatı.");
+                            }
+                        } catch (error) {
+                            this.showToast("Veriler içe aktarılamadı. Dosya bozuk olabilir.", "error");
+                        }
+                    };
+                    reader.readAsText(file);
+                    event.target.value = null; // Aynı dosyayı tekrar seçebilmek için
+                },
+                
+                // PWA Service Worker
+                registerServiceWorker() {
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.register('/sw.js')
+                            .then(registration => console.log('Service Worker registered with scope:', registration.scope))
+                            .catch(error => console.log('Service Worker registration failed:', error));
+                    }
+                }
+            };
+            
+            App.init();
+        });
+    </script>
+</body>
+</html>
